@@ -2,33 +2,46 @@
 // where your node app starts
 
 // init project
-var express = require('express');
-var app = express();
-var moment = require('moment');
+const express = require('express');
+let app = express();
+const moment = require('moment');
 moment().format();
 // enable CORS (https://en.wikipedia.org/wiki/Cross-origin_resource_sharing)
 // so that your API is remotely testable by FCC 
-var cors = require('cors');
+const cors = require('cors');
 app.use(cors({optionsSuccessStatus: 200}));  // some legacy browsers choke on 204
 
 // http://expressjs.com/en/starter/static-files.html
 app.use(express.static('public'));
 
-//Handle /api/:input GET requests
-app.route("/api/:inputDate/").get((req, res, next) => {
-  var input= req.params.inputDate;
-  let dateReggie = /\d{4}\-\d{2}\-\d{2}/
-  switch(dateReggie.test(input)){
-    case true:
-      req.unix = Date.parse(input);
-      req.utc = new Date(input).toUTCString();
-      break;
-    case false:
+
+//First, handle check GET requests on the root /api path. Must do this before checking /api/:inputDate/ otherwise it will infinite loop. Always go in /parent -> /parent/child order
+app.get("/api", (req, res, next) => {
+  req.unix = Date.now();
+  req.utc = moment().format("ddd, DD MMM YYYY HH:mm:ss").concat(" GMT");
+  next();
+},(req, res) =>{
+  res.json({unix: req.unix, utc: req.utc});
+});
+
+app.get("/api/:inputDate/", (req, res, next) => {
+  //UNIX epoch
+  //Poor implementation to handle old FCC Test
+  const unixReggie = /\d{9,}/;
+  let input = req.params.inputDate;
+  if(unixReggie.test(input)){
       req.unix = parseInt(input);
-      req.utc = moment.unix(parseInt(input)).utc();
+      //Convert input into UTC
+      req.utc = moment(parseInt(input)).utc().format("ddd, DD MMM YYYY HH:mm:ss").concat(" GMT");
+  } else{
+    req.utc = new Date(input).toUTCString();
+    req.unix = Date.parse(req.utc);
   }
-  console.log(input)
-  console.log(`req.unix= ${req.unix} | req.utc = ${req.utc}`);
+
+  if((req.utc).match(/Invalid date/ig)){
+    console.log("Invalid date error trigger: ")
+    res.json({error: "Invalid Date"});
+  }
   next();
 }, (req, res) => {
   res.json({unix: req.unix,utc: req.utc});
@@ -49,7 +62,7 @@ app.get("/api/hello", function (req, res) {
 
 
 // listen for requests :)
-var listener = app.listen(process.env.PORT, function () {
+let listener = app.listen(process.env.PORT, function () {
   console.log('Your app is listening on port ' + listener.address().port);
 });
 
